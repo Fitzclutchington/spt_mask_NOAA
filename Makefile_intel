@@ -1,0 +1,85 @@
+SPT = spt
+CMDIFF = cmdiff
+CXX = icpc
+CXXFLAGS = -g -Wall -Wpedantic -Wfatal-errors -Wunused-parameter -march=native -O3 -qopenmp -std=c++11 -I. -I/usr/include -I/data/data025/ykihai/Fortran/CLAVRX/OpenCV_V3.2.0_Intel/include \
+	-I/data/data025/ykihai/Fortran/CLAVRX/lib64_Intel_Compiler17.04_ThreadSafe/include -DMKL_LP64 -I${MKLROOT}/include  $(INC)
+LD = icpc
+LDFLAGS_SPT =\
+	-L/data/data025/ykihai/Fortran/CLAVRX/OpenCV_V3.2.0_Intel/lib \
+	-L/data/data025/ykihai/Fortran/CLAVRX/lib64_Intel_Compiler17.04_ThreadSafe/lib \
+	-L/data/data025/ykihai/Fortran/CLAVRX/glibc_2.23 \
+	-qopenmp \
+	-lnetcdf -lhdf5_hl -lhdf5 \
+	-lopencv_imgproc \
+	-lopencv_flann \
+	-lopencv_highgui \
+	-lopencv_core \
+	-lz_ipp -lippcv -lippi -lippdc \
+	-lipps -lippvm -lippcore -lsvml \
+	--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group \
+	-static \
+	-ljpeg -lsz -liomp5 -limf -lirc -lpthread -lm -lrt -ldl -lc -lgcc -lstdc++\
+
+LDFLAGS_CMDIFF =\
+	-L/data/data025/ykihai/Fortran/CLAVRX/OpenCV_V3.2.0_Intel/lib \
+	-L/data/data025/ykihai/Fortran/CLAVRX/lib64_Intel_Compiler17.04_ThreadSafe/lib \
+	-lnetcdf -lhdf5_hl -lhdf5 \
+	-lopencv_core \
+	-lopencv_imgproc \
+	-lopencv_highgui \
+	-lz_ipp -lippcv -lippi -lippdc \
+	-lipps -lippvm -lippcore \
+	--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group \
+	-static \
+	-ljpeg -lsz -liomp5 -limf -lirc -lpthread -lm -lrt -ldl -lc -lgcc -lstdc++\
+
+OFILES_SPT = \
+	utils.o\
+	io.o\
+	resample.o\
+	connectedcomponents.o\
+	filters.o\
+	spt.o\
+
+OFILES_CMDIFF =\
+	utils.o\
+	io.o\
+	resample.o\
+	cmdiff.o\
+
+HFILES =\
+	spt.h\
+	connectedcomponents.h\
+	fastBilateral.hpp\
+
+LOC =\
+	eigen-eigen-26667be4f70b\
+
+all: $(SPT) $(CMDIFF) tags
+
+$(SPT): $(OFILES_SPT)
+	$(LD) -o $(SPT) $(OFILES_SPT) $(LDFLAGS_SPT)
+
+$(CMDIFF): $(OFILES_CMDIFF)
+	$(LD) -o $(CMDIFF) $(OFILES_CMDIFF) $(LDFLAGS_CMDIFF)
+
+%.o: %.cc $(HFILES)
+	$(CXX) -I $(LOC)  -c $(CXXFLAGS) $<
+
+tags: $(OFILES_SPT:.o=.cc) $(HFILES)
+	ctags -n $^
+
+clean:
+	rm -f $(SPT) $(CMDIFF) \
+		$(OFILES_SPT) $(OFILES_CMDIFF) \
+		tags
+
+tidy:
+	clang-tidy -checks=*,-google-runtime-int,-cppcoreguidelines-pro-type-vararg,-cppcoreguidelines-pro-bounds-pointer-arithmetic,-cppcoreguidelines-pro-bounds-array-to-pointer-decay,-cppcoreguidelines-pro-bounds-constant-array-index,-cert-dcl50-cpp \
+		cmdiff.cc \
+		filters.cc \
+		io.cc \
+		resample.cc \
+		spt.cc \
+		utils.cc \
+		-- $(CXXFLAGS)
