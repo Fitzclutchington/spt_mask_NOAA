@@ -342,6 +342,13 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	front_mask.assign(TEST_LOCALMAX,        lam2 > -delta_Lam && front_mask == FRONT_GUESS);
 	front_mask.assign(BT12_TEST,            sst < bt12);
 	front_mask.assign(TEST_UNIFORMITY,      median_diff > median_thresh);
+	
+	// set FRONT GUESS pixels to LOCALMAX if pixels near TEST_UNIFORMITY pixels
+	acspo::matrix<uchar> mask_temp(front_mask.size());
+ 	mask_temp.assign(0, 1, front_mask!=TEST_UNIFORMITY);
+ 	mask_temp = rectdilate(mask_temp,5);
+ 	front_mask.assign(TEST_LOCALMAX,((mask_temp!=0)&(front_mask==FRONT_GUESS)));
+
 	front_mask.assign(TEST_CLOUD_BOUNDARY,  magdiff_bt12 < -delta_n);
 	front_mask.assign(TEST_LAPLACIAN,       laplacian_sst > thresh_L);
 	front_mask.assign(COLD_CLOUD,           sst < T_low);
