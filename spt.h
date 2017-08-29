@@ -107,9 +107,9 @@ enum {
 };
 
 enum {
-	LAND = -12,
-	ICE_TEST = -11,
-	COLD_CLOUD = -10,
+	LAND = -11,
+	ICE_TEST = -10,
+	COLD_CLOUD = -9,
 	BT11_08_TEST = -8,
 	NN_TEST = -7,
 	BT12_TEST = -6,

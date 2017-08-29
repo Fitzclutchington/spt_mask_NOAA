@@ -163,7 +163,8 @@ connectfronts(Mat_<schar> &fronts, const Mat1f &dx_sst, const Mat1f &dy_sst, con
 						for(int xx = x; xx < x+W; xx++){
 							if(valid(k) != 0 && fabs(sst(k) - csst) < 0.5 && rejected(k) == 0){
 								// cos-similarity
-								double sim = llam(k) * (dy_sst(k)*cdy_sst + dx_sst(k)*cdx_sst);
+								//double sim = llam(k) * (dy_sst(k)*cdy_sst + dx_sst(k)*cdx_sst);
+								double sim = (dy_sst(k)*cdy_sst + dx_sst(k)*cdx_sst);
 								if(sim > max){
 									max = sim;
 									argmax = k;
@@ -196,10 +197,24 @@ connectfronts(Mat_<schar> &fronts, const Mat1f &dx_sst, const Mat1f &dy_sst, con
 	}
 }
 
+static void
+createsptmask(const Mat1b &newacspo, const Mat_<schar> &frontsimg, Mat1b &sptmask)
+{
+ 	sptmask = 0;
+
+ 	// add fronts to sptmask
+ 	for(size_t i = 0; i < sptmask.total(); i++){
+ 		sptmask(i) = (newacspo(i)&MaskCloud) >> MaskCloudOffset;
+ 		if((newacspo(i)&MaskCloud) == MaskCloudClear && frontsimg(i) == FRONT_INIT){
+ 			sptmask(i) |= (1<<2);
+ 		}
+ 	}
+}
+
 // Write spt into NetCDF dataset ncid as variable named "spt_mask".
 //
 static void
-writesptmask(int ncid, const Mat1b &newacspo, const Mat_<schar> &frontsimg)
+writesptmask(int ncid, const Mat1b &sptmask)
 {
 	int n, varid, ndims, dimids[2];
 	nc_type xtype;
@@ -264,21 +279,11 @@ writesptmask(int ncid, const Mat1b &newacspo, const Mat_<schar> &frontsimg)
 		if(n != NC_NOERR){
 			ncfatal(n, "nc_inq_dimlen failed");
 		}
-		if(len != static_cast<size_t>(newacspo.size[i])){
-			eprintf("dimension %d is %d, want %d\n", i, len, newacspo.size[i]);
+		if(len != static_cast<size_t>(sptmask.size[i])){
+			eprintf("dimension %d is %d, want %d\n", i, len, sptmask.size[i]);
 		}
 	}
 	
-	Mat1b sptmask(newacspo.size());
-	sptmask = 0;
-
-	// add fronts to sptmask
-	for(size_t i = 0; i < sptmask.total(); i++){
-		sptmask(i) = (newacspo(i)&MaskCloud) >> MaskCloudOffset;
-		if((newacspo(i)&MaskCloud) == MaskCloudClear && frontsimg(i) == FRONT_INIT){
-			sptmask(i) |= (1<<2);
-		}
-	}
 
 	// Write data into netcdf variable.
 	n = nc_put_var_uchar(ncid, varid, sptmask.data);
@@ -287,9 +292,28 @@ writesptmask(int ncid, const Mat1b &newacspo, const Mat_<schar> &frontsimg)
 	}
 }
 
+/*
+static void
+remove_speckles(const Mat_<schar> &front_temp, Mat_<schar> &frontmask, int flag)
+{
+	Mat1b mask_temp(frontmask.size());
+
+	// create binary mask where temporary mask == flag
+	mask_temp.setTo(0,front_temp!=flag);
+	mask_temp.setTo(1,front_temp==flag);
+
+	// erode to remove speckles
+	recterode(mask_temp,mask_temp,5);
+	// dilate to bring back edges
+	rectdilate(mask_temp,mask_temp,5);
+
+	// insert flags into frontmask
+	frontmask.setTo(flag,mask_temp);
+}
+*/
 
 static acspo::matrix<schar>
-maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad_sst, const acspo::matrix<float> &bt08, const acspo::matrix<float> &bt11, const acspo::matrix<float> &mag_grad_bt11, const acspo::matrix<float> &bt12, const acspo::matrix<float> &eigen, const acspo::matrix<float> &laplacian_sst, const acspo::matrix<float> &lam2, const acspo::matrix<float> &medianSST, const acspo::matrix<uchar> ice_mask, const acspo::matrix<uchar> &land_mask)
+maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad_sst, const acspo::matrix<float> &bt08, const acspo::matrix<float> &bt11, const acspo::matrix<float> &mag_grad_bt11, const acspo::matrix<float> &bt12, const acspo::matrix<float> &mag_grad_bt12, const acspo::matrix<float> &eigen, const acspo::matrix<float> &laplacian_sst, const acspo::matrix<float> &lam2, const acspo::matrix<float> &medianSST, const acspo::matrix<uchar> ice_mask, const acspo::matrix<uchar> &land_mask, const acspo::matrix<uchar> &border_mask)
 {
     float delta_n = 0.1;
 	float T_low = 271.15;
@@ -300,7 +324,7 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	float eigen_thresh = 2;
 	float median_thresh = 0.5;
 	float mag_ratio_thresh = 0.5;
-	float std_thresh = 0.2;
+	float std_thresh = 0.5;
 
     acspo::matrix<schar> front_mask(sst.size());
 
@@ -345,6 +369,7 @@ class SPT {
 	acspo::matrix<float> bt12;
 	acspo::matrix<float> bt11;
     acspo::matrix<float> mag_grad_bt11;
+    acspo::matrix<float> mag_grad_bt12;
 	acspo::matrix<float> bt03;
 	acspo::matrix<float> bt08;
 	acspo::matrix<float> mag_grad_sst;
@@ -402,6 +427,12 @@ SPT::SPT(ACSPOFile &f)
     }
 
     {
+        acspo::matrix<float> dx_bt12, dy_bt12;
+	    std::tie(dx_bt12, dy_bt12) = gradient(bt12);
+        mag_grad_bt12 = hypot(dx_bt12, dy_bt12);
+    }
+
+    {
         std::tie(dx_sst, dy_sst) = gradient(sst);
         mag_grad_sst = hypot(dx_sst, dy_sst);
     }
@@ -445,7 +476,7 @@ SPT::SPT(ACSPOFile &f)
 void
 SPT::run()
 {
-	auto front_mask = maskfronts(sst, mag_grad_sst, bt08, bt11, mag_grad_bt11, bt12, eigen, laplacian_sst, lam2, medSST, ice_mask, land_mask);
+	auto front_mask = maskfronts(sst, mag_grad_sst, bt08, bt11, mag_grad_bt11, bt12, mag_grad_bt12, eigen, laplacian_sst, lam2, medSST, ice_mask, land_mask, border_mask);
 
 	acspo::matrix<uchar> easyclouds(sst.size());
 	easyclouds.assign(1, 0, front_mask < 0);
@@ -543,7 +574,9 @@ SPT::run()
     {
         auto new_cloud_mask_cv = acspo_to_opencv(new_cloud_mask);
         auto frontsimg_cv = acspo_to_opencv(frontsimg);
-	    writesptmask(ncid, new_cloud_mask_cv, frontsimg_cv);
+        Mat1b sptmask(new_cloud_mask_cv.size());
+        createsptmask(new_cloud_mask_cv, frontsimg_cv, sptmask);
+	    writesptmask(ncid, sptmask);
     }
 	
     {

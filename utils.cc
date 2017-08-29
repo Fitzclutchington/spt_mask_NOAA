@@ -455,10 +455,11 @@ void generate_cloud_histogram_3d(const acspo::matrix<float> &d1, const acspo::ma
 				s = round(d3(y,x)/steps[2]);
 				
 				
-				if(m > 0 && m < (sizes[0] -1) && n > 0 && n < (sizes[1] -1)&& s > 0 && s < (sizes[2] -1)){
-					hist(m,n,s)++;
-				}						
-								
+				for(i = 0; i <= 1; ++i){
+					if((m + i> 0) && (m + i < (sizes[0] -1)) && (n > 0) && (n < (sizes[1] -1)) && (s > 0) && (s < (sizes[2] -1))){
+						hist(m+i,n,s)++;
+					}						
+				}			
 			}
 		}
 	}
@@ -492,7 +493,7 @@ void check_cloud_histogram_3d(const acspo::matrix<float> &d1, const acspo::matri
 				s = round(d3(y,x)/steps[2]);
 				
 				if(m > 0 && m < (sizes[0] -1) && n > 0 && n < (sizes[1] -1)&& s > 0 && s < (sizes[2] -1)){
-					if(hist(m,n,s) < 1){
+					if(hist(m,n,s) <= 1){
 						frontmask(y,x) = flag;
 					}				
 				}				

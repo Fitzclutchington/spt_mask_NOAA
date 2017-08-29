@@ -322,7 +322,7 @@ acspo::matrix<float> compute_eigenvals(const acspo::matrix<float> &bt08, const a
       MatrixXf r;
       Matrix3f A;
 
-      if(isfinite(bt11(y,x)) && border_mask(y,x) == 0){
+      if(isfinite(bt11(y,x))){
         // calc first window
         // we know that first left are nans so we don't calculate left inds     
         bt08_sum=bt11_sum=bt12_sum=0;
@@ -354,9 +354,6 @@ acspo::matrix<float> compute_eigenvals(const acspo::matrix<float> &bt08, const a
         // projected into the second eigenvector
         count = valid_bt08.size();
         count_dim = valid_bt08.size();
-        if(y == 2663 && x == 1192){
-        	printf("count = %f min_num = %d\n",count,min_num);
-        }
         //printf("count = %f\n",count);
         //printf("min_num %d\n",min_num);
         if(count > min_num){
@@ -390,9 +387,6 @@ acspo::matrix<float> compute_eigenvals(const acspo::matrix<float> &bt08, const a
           res_mean = window_sum/ 3.0;
 
           eigen(y,x) = res_mean;
-          if(y == 2663 && x == 1192){
-        	printf("window_sum = %f res_mean = %f\n",window_sum,res_mean);
-        }
         }
       }
     }
