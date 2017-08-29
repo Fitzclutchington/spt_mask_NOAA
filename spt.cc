@@ -311,6 +311,21 @@ remove_speckles(const acspo::matrix<schar> &front_temp, acspo::matrix<schar> &fr
 	frontmask.assign(flag, mask_temp!=0);
 }
 
+static void
+remove_boundaries(acspo::matrix<schar> &front_mask, int flag)
+{
+	for(int i = 0; i < 3; ++i){
+		for(int j = 0; j < front_mask.cols(); ++j) front_mask(i,j) = flag;
+ 		for(int j = 0; j < front_mask.rows(); ++j) front_mask(j,i) = flag;
+ 	}
+
+ 	for(int i=front_mask.rows()-1; i > front_mask.rows()-3; --i){
+ 		for(int j = 0; j < front_mask.cols(); ++j) front_mask(i,j) = flag;
+	}
+ 	for(int i=front_mask.cols()-1; i > front_mask.cols()-3; --i){
+ 		for(int j = 0; j < front_mask.rows(); ++j) front_mask(j,i) = flag;
+ 	}
+}
 
 static acspo::matrix<schar>
 maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad_sst, const acspo::matrix<float> &bt08, const acspo::matrix<float> &bt11, const acspo::matrix<float> &mag_grad_bt11, const acspo::matrix<float> &bt12, const acspo::matrix<float> &mag_grad_bt12, const acspo::matrix<float> &eigen, const acspo::matrix<float> &laplacian_sst, const acspo::matrix<float> &lam2, const acspo::matrix<float> &medianSST, const acspo::matrix<uchar> ice_mask, const acspo::matrix<uchar> &land_mask, const acspo::matrix<uchar> &border_mask)
@@ -361,6 +376,9 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	front_mask.assign(ICE_TEST,             ice_mask != 0);
 	front_mask.assign(LAND,                 land_mask != 0);
     front_mask.assign(BT11_08_TEST,         bt11 < bt08);
+
+    //remove boundaries
+    remove_boundaries(front_mask,LAND);
 
     return front_mask;
 }
