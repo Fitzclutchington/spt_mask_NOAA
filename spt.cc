@@ -352,7 +352,12 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	front_mask.assign(TEST_CLOUD_BOUNDARY,  magdiff_bt12 < -delta_n);
 	front_mask.assign(TEST_LAPLACIAN,       laplacian_sst > thresh_L);
 	front_mask.assign(COLD_CLOUD,           sst < T_low);
-	front_mask.assign(RATIO_TEST,           mag_grad_sst > thresh_mag && (magdiff_bt11/mag_grad_sst) > mag_ratio_thresh);	
+
+	acspo::matrix<schar> front_temp(front_mask.size());
+	front_temp.copy(front_mask);
+	front_temp.assign(RATIO_TEST,           mag_grad_sst > thresh_mag && (magdiff_bt11/mag_grad_sst) > mag_ratio_thresh);	
+	remove_speckles(front_temp, front_mask, RATIO_TEST);	
+
 	front_mask.assign(ICE_TEST,             ice_mask != 0);
 	front_mask.assign(LAND,                 land_mask != 0);
     front_mask.assign(BT11_08_TEST,         bt11 < bt08);
