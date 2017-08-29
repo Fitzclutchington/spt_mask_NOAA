@@ -313,16 +313,17 @@ remove_speckles(const acspo::matrix<schar> &front_temp, acspo::matrix<schar> &fr
 
 static void
 remove_boundaries(acspo::matrix<schar> &front_mask, int flag)
-{
-	for(int i = 0; i < 3; ++i){
+{	
+	int boundary_length = 3;
+	for(int i = 0; i < boundary_length; ++i){
 		for(int j = 0; j < front_mask.cols(); ++j) front_mask(i,j) = flag;
  		for(int j = 0; j < front_mask.rows(); ++j) front_mask(j,i) = flag;
  	}
 
- 	for(int i=front_mask.rows()-1; i > front_mask.rows()-3; --i){
+ 	for(int i=front_mask.rows()-1; i > front_mask.rows()-boundary_length; --i){
  		for(int j = 0; j < front_mask.cols(); ++j) front_mask(i,j) = flag;
 	}
- 	for(int i=front_mask.cols()-1; i > front_mask.cols()-3; --i){
+ 	for(int i=front_mask.cols()-1; i > front_mask.cols()-boundary_length; --i){
  		for(int j = 0; j < front_mask.rows(); ++j) front_mask(j,i) = flag;
  	}
 }
@@ -528,9 +529,10 @@ SPT::run()
 	    float steps[3] = {0.2, 0.05, 0.05};
 
         Mat1f hist_cv;
-
+        ascspo::matrix<schar> front_temp(front_mask.size());
         generate_cloud_histogram_3d(bt11-bt11_low, bt11-bt12+1, bt11-bt08, lows, highs, steps, ind_ocean, hist_cv);
-	    check_cloud_histogram_3d(bt11-bt11_low, bt11-bt12+1, bt11-bt08, lows, highs, steps, ind_test, hist_cv, NN_TEST, front_mask);
+	    check_cloud_histogram_3d(bt11-bt11_low, bt11-bt12+1, bt11-bt08, lows, highs, steps, ind_test, hist_cv, NN_TEST, front_temp);
+	    remove_speckles(front_temp, front_mask, NN_TEST);
     }
 
 	easyclouds.assign(1, 0, front_mask < 0);
