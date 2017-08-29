@@ -292,25 +292,25 @@ writesptmask(int ncid, const Mat1b &sptmask)
 	}
 }
 
-/*
+
 static void
-remove_speckles(const Mat_<schar> &front_temp, Mat_<schar> &frontmask, int flag)
+remove_speckles(const acspo::matrix<schar> &front_temp, acspo::matrix<schar> &frontmask, int flag)
 {
-	Mat1b mask_temp(frontmask.size());
+	acspo::matrix<uchar> mask_temp(frontmask.size());
 
 	// create binary mask where temporary mask == flag
-	mask_temp.setTo(0,front_temp!=flag);
-	mask_temp.setTo(1,front_temp==flag);
+	mask_temp.assign(0, front_temp != flag);
+	mask_temp.assign(1, front_temp == flag);
 
 	// erode to remove speckles
-	recterode(mask_temp,mask_temp,5);
+	mask_temp = recterode(mask_temp,5);
 	// dilate to bring back edges
-	rectdilate(mask_temp,mask_temp,5);
+	mask_temp = rectdilate(mask_temp,5);
 
 	// insert flags into frontmask
-	frontmask.setTo(flag,mask_temp);
+	frontmask.assign(flag, mask_temp!=0);
 }
-*/
+
 
 static acspo::matrix<schar>
 maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad_sst, const acspo::matrix<float> &bt08, const acspo::matrix<float> &bt11, const acspo::matrix<float> &mag_grad_bt11, const acspo::matrix<float> &bt12, const acspo::matrix<float> &mag_grad_bt12, const acspo::matrix<float> &eigen, const acspo::matrix<float> &laplacian_sst, const acspo::matrix<float> &lam2, const acspo::matrix<float> &medianSST, const acspo::matrix<uchar> ice_mask, const acspo::matrix<uchar> &land_mask, const acspo::matrix<uchar> &border_mask)
@@ -328,11 +328,10 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 
     acspo::matrix<schar> front_mask(sst.size());
 
-	auto magdiff = mag_grad_sst - mag_grad_bt11 ;
-	auto median_diff = abs(medianSST - sst);
+	auto magdiff_bt12 = mag_grad_sst - mag_grad_bt12 ;
+ 	auto magdiff_bt11 = mag_grad_sst - mag_grad_bt11 ;
 
-    auto sst_row_diff = row_neighbor_diffs(sst);
-	auto median_row_diff = row_neighbor_diffs(medianSST);
+	auto median_diff = abs(medianSST - sst);
 
     auto std_median = stdfilter(medianSST, 7);
     auto std_sst = stdfilter(sst, 7);
@@ -343,10 +342,10 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	front_mask.assign(TEST_LOCALMAX,        lam2 > -delta_Lam && front_mask == FRONT_GUESS);
 	front_mask.assign(BT12_TEST,            sst < bt12);
 	front_mask.assign(TEST_UNIFORMITY,      median_diff > median_thresh);
-	front_mask.assign(TEST_CLOUD_BOUNDARY,  magdiff < -delta_n);
+	front_mask.assign(TEST_CLOUD_BOUNDARY,  magdiff_bt12 < -delta_n);
 	front_mask.assign(TEST_LAPLACIAN,       laplacian_sst > thresh_L);
 	front_mask.assign(COLD_CLOUD,           sst < T_low);
-	front_mask.assign(RATIO_TEST,           mag_grad_sst > thresh_mag && (magdiff/mag_grad_sst) > mag_ratio_thresh);	
+	front_mask.assign(RATIO_TEST,           mag_grad_sst > thresh_mag && (magdiff_bt11/mag_grad_sst) > mag_ratio_thresh);	
 	front_mask.assign(ICE_TEST,             ice_mask != 0);
 	front_mask.assign(LAND,                 land_mask != 0);
     front_mask.assign(BT11_08_TEST,         bt11 < bt08);
@@ -496,7 +495,7 @@ SPT::run()
 	    minMaxLoc(bt11_cv, &bt11_low, &bt11_high, &min_loc, &max_loc, ind_ocean_cv);
 	    float lows[3] = { (float)bt11_low, -1, 0};
 	    float highs[3] = {(float)bt11_high, 5, 5};
-	    float steps[3] = {0.2, 0.025, 0.025};
+	    float steps[3] = {0.2, 0.05, 0.05};
 
         Mat1f hist_cv;
 

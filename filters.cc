@@ -70,6 +70,15 @@ acspo::matrix<uchar> rectdilate(const acspo::matrix<uchar> &src, unsigned int si
     return dst;
 }
 
+acspo::matrix<uchar> recterode(const acspo::matrix<uchar> &src, unsigned int size)
+{
+    acspo::matrix<uchar> temp(src.size());
+    temp.assign(255, 0, src == 0);
+    auto dilate = rectdilate(temp,size);
+    dilate.assign(255,0, temp == 0);
+    return dilate;
+}
+
 acspo::matrix<float> medfilter(const acspo::matrix<float> &src, unsigned int size)
 {
     unsigned int rows = src.rows(), cols = src.cols();

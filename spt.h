@@ -25,7 +25,7 @@ using namespace cv;
 #define SQ(x)    ((x)*(x))
 #define SGN(A)   ((A) > 0 ? 1 : ((A) < 0 ? -1 : 0 ))
 #define nelem(x) (sizeof(x)/sizeof((x)[0]))
-#define SAVENC(X)	if(DEBUG)savenc("../data/thermalfronts/" #X ".nc", (X))
+#define SAVENC(X)	if(DEBUG)savenc( #X ".nc", (X))
 #define SAVENCF(X, Y)	if(DEBUG)savenc("../data/thermalfronts/" #Y ".nc", (X))
 #define SAVENCN(X, Y)	if(DEBUG)savenc(Y, (X))
 #define CHECKMAT(M, T)	CV_Assert((M).type() == (T) && (M).isContinuous())
@@ -161,6 +161,7 @@ void loadnc(const char*, Mat&);
 
 // filters.cc
 acspo::matrix<uchar> rectdilate(const acspo::matrix<uchar> &src, unsigned int size);
+acspo::matrix<uchar> recterode(const acspo::matrix<uchar> &src, unsigned int size);
 acspo::matrix<float> medfilter(const acspo::matrix<float> &src, unsigned int size);
 std::tuple<acspo::matrix<float>, acspo::matrix<float> > gradient(acspo::matrix<float> &src);
 acspo::matrix<float> stdfilter(const acspo::matrix<float> &src, int ksize);
