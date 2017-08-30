@@ -354,8 +354,8 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 
 	front_mask.assign(FRONT_GUESS, TEST_GRADMAG_LOW, mag_grad_sst > thresh_mag);
 
-	front_mask.assign(EIG_TEST,             eigen > eigen_thresh);
 	front_mask.assign(TEST_LOCALMAX,        lam2 > -delta_Lam && front_mask == FRONT_GUESS);
+	front_mask.assign(STD_TEST, (std_sst - std_median >std_thresh));
 	front_mask.assign(BT12_TEST,            sst < bt12);
 	front_mask.assign(TEST_UNIFORMITY,      median_diff > median_thresh);
 	
@@ -370,6 +370,10 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	front_mask.assign(COLD_CLOUD,           sst < T_low);
 
 	acspo::matrix<schar> front_temp(front_mask.size());
+	front_temp.copy(front_mask);
+	front_temp.assign(EIG_TEST,             eigen > eigen_thresh);
+	remove_speckles(front_temp, front_mask, EIG_TEST);
+
 	front_temp.copy(front_mask);
 	front_temp.assign(RATIO_TEST,           mag_grad_sst > thresh_mag && (magdiff_bt11/mag_grad_sst) > mag_ratio_thresh);	
 	remove_speckles(front_temp, front_mask, RATIO_TEST);	
@@ -529,24 +533,35 @@ SPT::run()
 	    float steps[3] = {0.2, 0.05, 0.05};
 
         Mat1f hist_cv;
-        ascspo::matrix<schar> front_temp(front_mask.size());
+        acspo::matrix<schar> front_temp(front_mask.size());
         generate_cloud_histogram_3d(bt11-bt11_low, bt11-bt12+1, bt11-bt08, lows, highs, steps, ind_ocean, hist_cv);
 	    check_cloud_histogram_3d(bt11-bt11_low, bt11-bt12+1, bt11-bt08, lows, highs, steps, ind_test, hist_cv, NN_TEST, front_temp);
 	    remove_speckles(front_temp, front_mask, NN_TEST);
+	    front_mask.assign(ICE_TEST, ice_mask!=0);
+		front_mask.assign(LAND, land_mask!=0);
     }
 
 	easyclouds.assign(1, 0, front_mask < 0);
 
+
+	acspo::matrix<int> cluster_labels(sst.size());
+    auto cluster_labels_cv = acspo_to_opencv(cluster_labels);
+
+    double cluster_low, cluster_high;
+	Point min_loc, max_loc;
     {
         static const int ref_thresh = -8;
 
-        acspo::matrix<int> cluster_labels(sst.size());
-        auto cluster_labels_cv = acspo_to_opencv(cluster_labels);
+        static const float ratio_threshold = 0.3;
 
+        acspo::matrix<uchar> agreed_clear(sst.size());
+        acspo::matrix<uchar> agreed_cloud(sst.size());
         acspo::matrix<uchar> disagree(sst.size());
         auto disagree_cv = acspo_to_opencv(disagree);
 
-        disagree.assign(255, 0, cloud_mask != 0 && easyclouds == 0);
+        agreed_clear.assign(255, 0, ((cloud_mask==0) & (easyclouds==0) & (land_mask==0)));
+        agreed_cloud.assign(255, 0, (cloud_mask!=0 & (easyclouds!=0) & (land_mask==0)));
+        disagree.assign(255, 0, (cloud_mask != 0 && easyclouds == 0));
 
 	    connectedComponentsWithLimit(disagree_cv, 4, MIN_CLUSTER_SIZE, cluster_labels_cv);
 	    easyclouds.assign(1, cluster_labels == COMP_SPECKLE);
@@ -554,16 +569,46 @@ SPT::run()
         auto sst_cv = acspo_to_opencv(sst);
         auto sst_ref_cv = acspo_to_opencv(sst_ref);
 
-        double cluster_low, cluster_high;
-	    Point min_loc, max_loc;
+      
+	    auto sst_ref_diff_cv = sst_cv - sst_ref_cv;
 
 	    minMaxLoc(cluster_labels_cv, &cluster_low, &cluster_high, &min_loc, &max_loc);
-	    for (unsigned int i = 1; i < cluster_high; ++i) {
-		    Scalar tempVal = mean( (sst_cv - sst_ref_cv), (cluster_labels_cv==i) );
+	    int i,j,y,x;
+	    int num_clear, num_cloud;
+	    int lag = 1; // window = (2*lag + 1)^2
+	    float ratio;
+	    
+
+	    for (unsigned int lbl = 1; lbl < cluster_high; ++lbl) {
+	    	num_clear = num_cloud = 0;
+		    Scalar tempVal = mean( sst_ref_diff_cv, (cluster_labels_cv==lbl) );
 		    if(tempVal[0] < ref_thresh){
-			    easyclouds.assign(1, cluster_labels == i);
-			    cluster_labels.assign(-1, cluster_labels == i);
+			    easyclouds.assign(1, cluster_labels == lbl);
+			    cluster_labels.assign(-1, cluster_labels == lbl);
 		    }
+		    
+		    else{  // remove clusters surrounded by clouds
+		    	for(int y = lag; y < easyclouds.rows() - lag; ++y){
+					for(int x = lag; x < easyclouds.cols() - lag; ++x){
+						if(cluster_labels(y,x) == lbl){
+							for(i = -lag; i <= lag; ++i){
+								for(j = -lag; j <= lag; ++j){
+									if(agreed_cloud(y+i,x+j)){
+										num_cloud++;
+									}
+									if(agreed_clear(y+i,x+j)){
+										num_clear++;
+									}
+								}
+							}
+						}
+					}
+				}
+				if((num_clear + num_cloud != 0)) ratio = num_clear/((float)num_cloud + num_clear);
+				else ratio = -1;
+				if(ratio < ratio_threshold) easyclouds.assign(1,cluster_labels==lbl);
+			}
+			
 	    }
     }
 
@@ -579,7 +624,6 @@ SPT::run()
         auto logmag_cv = acspo_to_opencv(logmag);
         auto easyclouds_cv = acspo_to_opencv(easyclouds);
         auto lam2_cv = acspo_to_opencv(lam2);
-	    //TODO: pass logmag to thinfronts
 	    connectfronts(frontsimg_cv, dx_sst_cv, dy_sst_cv, sst_cv, mag_grad_sst_cv, logmag_cv, easyclouds_cv, lam2_cv);
     }
 
@@ -589,11 +633,12 @@ SPT::run()
     }
 
 	acspo::matrix<int> labels;
+	Mat1i labels_cv;
     {
-        Mat1i labels_cv;
         auto frontsimg_cv = acspo_to_opencv(frontsimg);
 	    connectedComponentsWithLimit(frontsimg_cv == FRONT_INIT, 8, MIN_FRONT_SIZE, labels_cv);
         labels = opencv_to_acspo(labels_cv);
+        labels.assign(FRONT_INVALID,labels==COMP_SPECKLE);
     }
 
 	labels.assign(FRONT_INVALID, easyclouds != 0);
@@ -602,12 +647,43 @@ SPT::run()
     acspo::matrix<uchar> new_cloud_mask(sst.size());
     new_cloud_mask.assign(255, 0, cloud_mask != 0 && easyclouds != 0);
 
-    {
+    {	
+        auto cloud_mask_cv = acspo_to_opencv(cloud_mask);
         auto new_cloud_mask_cv = acspo_to_opencv(new_cloud_mask);
         auto frontsimg_cv = acspo_to_opencv(frontsimg);
-        Mat1b sptmask(new_cloud_mask_cv.size());
-        createsptmask(new_cloud_mask_cv, frontsimg_cv, sptmask);
-	    writesptmask(ncid, sptmask);
+        Mat1b sptmask_cv(new_cloud_mask_cv.size());
+        createsptmask(new_cloud_mask_cv, frontsimg_cv, sptmask_cv);
+
+        Mat1b front_restored = ((sptmask_cv == 4) & (cloud_mask_cv));
+	 	connectedComponentsWithLimit(front_restored, 8, MIN_FRONT_SIZE, labels_cv);
+	 	sptmask_cv.setTo(3,labels_cv==COMP_SPECKLE);
+	 
+	 	Mat1b restored = (((sptmask_cv == 0) | (sptmask_cv == 4)) & (cloud_mask_cv));
+	 	connectedComponentsWithLimit(restored, 4, MIN_CLUSTER_SIZE, cluster_labels_cv);
+	 	sptmask_cv.setTo(3,cluster_labels_cv==COMP_SPECKLE);
+	 
+	 	minMaxLoc(cluster_labels_cv, &cluster_low, &cluster_high, &min_loc, &max_loc);
+	 	
+	 	for(unsigned int lbl = 1; lbl < cluster_high+1; ++lbl){
+	 		
+	 		int num_fronts = 0;
+	 		// if reference condition does not catch cluster
+	 		// check whether cluster is surrounded by agreed cloud
+	 	    for(int y = 0; y < easyclouds.rows(); ++y){
+	 			for(int x = 0; x < easyclouds.cols(); ++x){
+	 				if(cluster_labels_cv(y,x)==lbl && front_restored(y,x)){
+	 					num_fronts++;
+	 				}
+	 			}
+	 		}
+	 
+	 		if(num_fronts < 2*MIN_FRONT_SIZE){
+	 			sptmask_cv.setTo(3,cluster_labels_cv==lbl);
+	 		}		
+	 	}
+	 
+
+	    writesptmask(ncid, sptmask_cv);
     }
 	
     {

@@ -85,7 +85,7 @@ enum {
 	COMP_SPECKLE = -2,	// component that is too small
 	
 	FRONT_SIDE_DIST = 7,	// multiplied to gradient dx/dy to obtain front sides
-	MIN_FRONT_SIZE = 50,//100,
+	MIN_FRONT_SIZE = 10,//100,
 	MIN_FRONT_FRAGMENT = 10,
     MIN_CLUSTER_SIZE = 100
 };
@@ -107,9 +107,10 @@ enum {
 };
 
 enum {
-	LAND = -11,
-	ICE_TEST = -10,
-	COLD_CLOUD = -9,
+	LAND = -12,
+	ICE_TEST = -11,
+	COLD_CLOUD = -10,
+	STD_TEST = -9,
 	BT11_08_TEST = -8,
 	NN_TEST = -7,
 	BT12_TEST = -6,
