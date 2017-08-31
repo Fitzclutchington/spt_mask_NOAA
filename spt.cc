@@ -299,11 +299,11 @@ remove_speckles(const acspo::matrix<schar> &front_temp, acspo::matrix<schar> &fr
 	acspo::matrix<uchar> mask_temp(frontmask.size());
 
 	// create binary mask where temporary mask == flag
-	mask_temp.assign(0, front_temp != flag);
-	mask_temp.assign(1, front_temp == flag);
+	mask_temp.assign(0, 1, front_temp != flag);
 
 	// erode to remove speckles
 	mask_temp = recterode(mask_temp,5);
+
 	// dilate to bring back edges
 	mask_temp = rectdilate(mask_temp,5);
 
@@ -354,15 +354,17 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 
 	front_mask.assign(FRONT_GUESS, TEST_GRADMAG_LOW, mag_grad_sst > thresh_mag);
 
-	front_mask.assign(TEST_LOCALMAX,        lam2 > -delta_Lam && front_mask == FRONT_GUESS);
+	front_mask.assign(TEST_LOCALMAX,        (lam2 > -delta_Lam) && (front_mask == FRONT_GUESS));
 	front_mask.assign(STD_TEST, (std_sst - std_median >std_thresh));
 	front_mask.assign(BT12_TEST,            sst < bt12);
 	front_mask.assign(TEST_UNIFORMITY,      median_diff > median_thresh);
 	
 	// set FRONT GUESS pixels to LOCALMAX if pixels near TEST_UNIFORMITY pixels
 	acspo::matrix<uchar> mask_temp(front_mask.size());
- 	mask_temp.assign(0, 1, front_mask!=TEST_UNIFORMITY);
+ 	mask_temp.assign(0, 255, front_mask!=TEST_UNIFORMITY);
  	mask_temp = rectdilate(mask_temp,5);
+ 	auto mask_temp_cv = acspo_to_opencv(mask_temp);
+ 	SAVENC(mask_temp_cv);
  	front_mask.assign(TEST_LOCALMAX,((mask_temp!=0)&(front_mask==FRONT_GUESS)));
 
 	front_mask.assign(TEST_CLOUD_BOUNDARY,  magdiff_bt12 < -delta_n);
@@ -375,7 +377,7 @@ maskfronts(const acspo::matrix<float> &sst, const acspo::matrix<float> &mag_grad
 	remove_speckles(front_temp, front_mask, EIG_TEST);
 
 	front_temp.copy(front_mask);
-	front_temp.assign(RATIO_TEST,           mag_grad_sst > thresh_mag && (magdiff_bt11/mag_grad_sst) > mag_ratio_thresh);	
+	front_temp.assign(RATIO_TEST,           ((mag_grad_sst > thresh_mag) && ((magdiff_bt11/mag_grad_sst) > mag_ratio_thresh)));	
 	remove_speckles(front_temp, front_mask, RATIO_TEST);	
 
 	front_mask.assign(ICE_TEST,             ice_mask != 0);
@@ -539,6 +541,8 @@ SPT::run()
 	    remove_speckles(front_temp, front_mask, NN_TEST);
 	    front_mask.assign(ICE_TEST, ice_mask!=0);
 		front_mask.assign(LAND, land_mask!=0);
+		auto front_mask_cv = acspo_to_opencv(front_mask);
+		SAVENC(front_mask_cv);
     }
 
 	easyclouds.assign(1, 0, front_mask < 0);

@@ -75,7 +75,7 @@ acspo::matrix<uchar> recterode(const acspo::matrix<uchar> &src, unsigned int siz
     acspo::matrix<uchar> temp(src.size());
     temp.assign(255, 0, src == 0);
     auto dilate = rectdilate(temp,size);
-    dilate.assign(255,0, temp == 0);
+    dilate.assign(255,0, dilate == 0);
     return dilate;
 }
 
@@ -130,6 +130,10 @@ static acspo::matrix<float> filter2d(const acspo::matrix<float> &src, const acsp
             for (unsigned int k = 0; k < kern_elem; k++) {
                 if (!std::isnan(win(k))) {
                     dst(i, j) += kern(k)*win(k);
+                }
+                else{
+                    dst(i, j) = NAN;
+                    break;
                 }
             }
         }
